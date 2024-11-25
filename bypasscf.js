@@ -9,11 +9,6 @@ import TelegramBot from "node-telegram-bot-api";
 
 dotenv.config();
 
-// 截图保存的文件夹
-// const screenshotDir = "screenshots";
-// if (!fs.existsSync(screenshotDir)) {
-//   fs.mkdirSync(screenshotDir);
-// }
 puppeteer.use(StealthPlugin());
 
 // Load the default .env file
@@ -152,22 +147,21 @@ async function launchBrowserForUser(username, password) {
     console.log("当前用户:", username);
     const browserOptions = {
       headless: "auto",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"], // Linux 需要的安全设置
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath: process.env.CHROME_PATH || (process.platform === 'win32'
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        : '/usr/bin/google-chrome')
     };
 
-    // 如果环境变量不是 'dev'，则添加代理配置
-    // if (process.env.ENVIRONMENT !== "dev") {
-    // browserOptions["proxy"] = {
-    //   host: "38.154.227.167",
-    //   port: "5868",
-    //   username: "pqxujuyl",
-    //   password: "y1nmb5kjbz9t",
-    // };
-    // }
+    
+    // 检查 Chrome 可执行文件是否存在
+    if (!fs.existsSync(browserOptions.executablePath)) {
+      throw new Error(`Chrome 可执行文件未找到，请检查路径: ${browserOptions.executablePath}`);
+    }
 
-    var { connect } = await import("puppeteer-real-browser");
-    const { page, browser: newBrowser } = await connect(browserOptions);
-    browser = newBrowser; // 将 browser 初始化
+    browser = await puppeteer.launch(browserOptions);
+    const page = await browser.newPage();
+
     // 启动截图功能
     // takeScreenshots(page);
     //登录操作
@@ -274,12 +268,12 @@ async function launchBrowserForUser(username, password) {
     }
     return { browser };
   } catch (err) {
-    // throw new Error(err);
-    console.log("Error in launchBrowserForUser:", err);
+    console.error("Error in launchBrowserForUser:", err);
     if (token && chatId) {
       sendToTelegram(`${err.message}`);
     }
-    return { browser }; // 错误时仍然返回 browser
+    if (browser) await browser.close();
+    return { browser: null }; // 返回 null 表示浏览器未成功启动
   }
 }
 async function login(page, username, password) {
